@@ -1,4 +1,7 @@
 import Foundation
+import os.log
+
+private let logger = Logger(subsystem: "com.sarimarton.llmkeyboard", category: "LLMService")
 
 // MARK: - LLM Service
 
@@ -13,9 +16,11 @@ final class LLMService {
 
     func cleanup(text: String) async throws -> String {
         guard settings.enableLLMCleanup else {
+            logDebug("LLM cleanup disabled, returning original text")
             return text
         }
 
+        logDebug("Starting cleanup with service: \(settings.llmServiceType.displayName)")
         let prompt = settings.cleanupPrompt + text
 
         switch settings.llmServiceType {
@@ -25,16 +30,23 @@ final class LLMService {
             return try await callOpenAICompatibleAPI(prompt: prompt)
         }
     }
+    
+    private func logDebug(_ message: String) {
+        NSLog("🔍 [LLMService] %@", message)
+    }
 
     // MARK: - Claude API
 
     private func callClaudeAPI(prompt: String) async throws -> String {
         let apiKey = settings.llmAPIKey
         guard !apiKey.isEmpty else {
+            logDebug("❌ Claude API key is missing")
             throw LLMError.missingAPIKey
         }
 
         let url = URL(string: settings.llmBaseURL + "/messages")!
+        logDebug("Calling Claude API at: \(url.absoluteString)")
+        logDebug("Model: \(settings.llmModelName)")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -52,14 +64,19 @@ final class LLMService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        logDebug("Sending request to Claude...")
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
+            logDebug("❌ Invalid response type")
             throw LLMError.invalidResponse
         }
 
+        logDebug("Response status code: \(httpResponse.statusCode)")
+
         guard httpResponse.statusCode == 200 else {
             let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            logDebug("❌ API Error (\(httpResponse.statusCode)): \(errorText)")
             throw LLMError.apiError(httpResponse.statusCode, errorText)
         }
 
@@ -75,9 +92,11 @@ final class LLMService {
         let result = try JSONDecoder().decode(ClaudeResponse.self, from: data)
 
         guard let textContent = result.content.first(where: { $0.type == "text" })?.text else {
+            logDebug("❌ No text content in response")
             throw LLMError.noContent
         }
 
+        logDebug("✅ Claude API call successful")
         return textContent
     }
 
@@ -86,15 +105,19 @@ final class LLMService {
     private func callOpenAICompatibleAPI(prompt: String) async throws -> String {
         let apiKey = settings.llmAPIKey
         guard !apiKey.isEmpty else {
+            logDebug("❌ API key is missing")
             throw LLMError.missingAPIKey
         }
 
         let baseURL = settings.llmServiceType == .custom ? settings.llmBaseURL : settings.llmServiceType.defaultBaseURL
         guard !baseURL.isEmpty else {
+            logDebug("❌ Base URL is missing")
             throw LLMError.missingBaseURL
         }
 
         let url = URL(string: baseURL + "/chat/completions")!
+        logDebug("Calling OpenAI-compatible API at: \(url.absoluteString)")
+        logDebug("Model: \(settings.llmModelName)")
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -111,14 +134,19 @@ final class LLMService {
 
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        logDebug("Sending request...")
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
+            logDebug("❌ Invalid response type")
             throw LLMError.invalidResponse
         }
 
+        logDebug("Response status code: \(httpResponse.statusCode)")
+
         guard httpResponse.statusCode == 200 else {
             let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
+            logDebug("❌ API Error (\(httpResponse.statusCode)): \(errorText)")
             throw LLMError.apiError(httpResponse.statusCode, errorText)
         }
 
@@ -136,9 +164,11 @@ final class LLMService {
         let result = try JSONDecoder().decode(OpenAIResponse.self, from: data)
 
         guard let content = result.choices.first?.message.content else {
+            logDebug("❌ No content in response")
             throw LLMError.noContent
         }
 
+        logDebug("✅ API call successful")
         return content
     }
 }

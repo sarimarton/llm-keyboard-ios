@@ -1,8 +1,11 @@
 import Foundation
 import Combine
+import os.log
 #if canImport(UIKit)
 import UIKit
 #endif
+
+private let logger = Logger(subsystem: "com.sarimarton.llmkeyboard", category: "Settings")
 
 // MARK: - Enums
 
@@ -27,6 +30,40 @@ enum SpeechProvider: String, CaseIterable, Codable {
             return "Uses OpenAI Whisper API. Better for mixed language (Hungarian + English). Requires API key."
         case .whisperLocal:
             return "Uses on-device Whisper model. Best quality, no network needed, but uses more storage."
+        }
+    }
+}
+
+enum AudioEngineMode: String, CaseIterable, Codable {
+    case tapFirst = "tap_first"
+    case startFirst = "start_first"
+    case streaming = "streaming"
+    case noTapDiag = "no_tap_diag"
+
+    var modeLabel: String {
+        switch self {
+        case .tapFirst: return "A"
+        case .startFirst: return "B"
+        case .streaming: return "C"
+        case .noTapDiag: return "D"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .tapFirst: return "A: Tap First (current)"
+        case .startFirst: return "B: Start First"
+        case .streaming: return "C: Streaming"
+        case .noTapDiag: return "D: No Tap (diag)"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .tapFirst: return "Install tap, then start engine"
+        case .startFirst: return "Start engine, then install tap"
+        case .streaming: return "Stream directly to SFSpeech"
+        case .noTapDiag: return "Just start engine, no recording"
         }
     }
 }
@@ -85,7 +122,7 @@ final class SettingsManager: ObservableObject {
     static let shared = SettingsManager()
 
     private let defaults: UserDefaults
-    private let appGroupID = "group.com.sarimarton.llmkeyboard.shared"
+    private let appGroupID = "group.com.sarimarton.llmkeyboard.share"
 
     // MARK: - Published Properties
 
@@ -106,6 +143,10 @@ final class SettingsManager: ObservableObject {
 
     @Published var speechLanguage: String {
         didSet { save(speechLanguage, forKey: .speechLanguage) }
+    }
+
+    @Published var audioEngineMode: AudioEngineMode {
+        didSet { save(audioEngineMode.rawValue, forKey: .audioEngineMode) }
     }
 
     // LLM Service
@@ -152,6 +193,7 @@ final class SettingsManager: ObservableObject {
         case whisperAPIKey
         case whisperModelSize
         case speechLanguage
+        case audioEngineMode
         case llmServiceType
         case llmBaseURL
         case llmAPIKey
@@ -166,20 +208,36 @@ final class SettingsManager: ObservableObject {
         // Try to use App Group defaults, fallback to standard
         if let groupDefaults = UserDefaults(suiteName: appGroupID) {
             defaults = groupDefaults
+            NSLog("✅ [Settings] Using App Group: %@", appGroupID)
         } else {
             defaults = .standard
+            NSLog("⚠️ [Settings] App Group failed, using standard UserDefaults")
         }
+
+        // Force synchronize to ensure container is initialized
+        defaults.synchronize()
 
         // Load all settings
         speechProvider = SpeechProvider(rawValue: defaults.string(forKey: Key.speechProvider.rawValue) ?? "") ?? .apple
         whisperAPIKey = defaults.string(forKey: Key.whisperAPIKey.rawValue) ?? ""
         whisperModelSize = WhisperModelSize(rawValue: defaults.string(forKey: Key.whisperModelSize.rawValue) ?? "") ?? .base
         speechLanguage = defaults.string(forKey: Key.speechLanguage.rawValue) ?? "hu-HU"
+        audioEngineMode = AudioEngineMode(rawValue: defaults.string(forKey: Key.audioEngineMode.rawValue) ?? "") ?? .tapFirst
 
-        llmServiceType = LLMServiceType(rawValue: defaults.string(forKey: Key.llmServiceType.rawValue) ?? "") ?? .claude
-        llmBaseURL = defaults.string(forKey: Key.llmBaseURL.rawValue) ?? LLMServiceType.claude.defaultBaseURL
-        llmAPIKey = defaults.string(forKey: Key.llmAPIKey.rawValue) ?? ""
-        llmModelName = defaults.string(forKey: Key.llmModelName.rawValue) ?? LLMServiceType.claude.defaultModel
+        // TEST DEFAULTS - remove in production
+        let testDefaults = true
+        if testDefaults {
+            llmServiceType = .custom
+            llmBaseURL = "https://mba2020.taild008f3.ts.net/claude/v1"
+            llmAPIKey = "dummy"
+            llmModelName = "claude-sonnet-4-20250514"
+        } else {
+            llmServiceType = LLMServiceType(rawValue: defaults.string(forKey: Key.llmServiceType.rawValue) ?? "") ?? .claude
+            llmBaseURL = defaults.string(forKey: Key.llmBaseURL.rawValue) ?? LLMServiceType.claude.defaultBaseURL
+            llmAPIKey = defaults.string(forKey: Key.llmAPIKey.rawValue) ?? ""
+            llmModelName = defaults.string(forKey: Key.llmModelName.rawValue) ?? LLMServiceType.claude.defaultModel
+        }
+        // Always load from user settings
         enableLLMCleanup = defaults.bool(forKey: Key.enableLLMCleanup.rawValue)
         cleanupPrompt = defaults.string(forKey: Key.cleanupPrompt.rawValue) ?? Self.defaultCleanupPrompt
 
@@ -225,5 +283,11 @@ final class SettingsManager: ObservableObject {
         #else
         isKeyboardEnabled = false
         #endif
+    }
+
+    /// Re-read settings from UserDefaults (useful for keyboard extension to pick up changes from main app)
+    func refresh() {
+        defaults.synchronize()
+        audioEngineMode = AudioEngineMode(rawValue: defaults.string(forKey: Key.audioEngineMode.rawValue) ?? "") ?? .tapFirst
     }
 }

@@ -68,6 +68,19 @@ struct SettingsView: View {
                     Text(settings.speechProvider.description)
                 }
 
+                // MARK: - Audio Engine Mode (Debug)
+                Section {
+                    Picker("Mode", selection: $settings.audioEngineMode) {
+                        ForEach(AudioEngineMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                } header: {
+                    Text("Audio Engine Mode (Debug)")
+                } footer: {
+                    Text(settings.audioEngineMode.description)
+                }
+
                 // MARK: - LLM Service
                 Section {
                     Picker("Service", selection: $settings.llmServiceType) {
@@ -131,27 +144,124 @@ struct SettingsView: View {
 struct KeyboardSetupGuideView: View {
     var body: some View {
         List {
+            // Quick action
             Section {
-                Text("1. Open Settings app")
-                Text("2. Go to General → Keyboard → Keyboards")
-                Text("3. Tap 'Add New Keyboard...'")
-                Text("4. Select 'LLM Keyboard'")
-                Text("5. Tap 'LLM Keyboard' and enable 'Allow Full Access'")
-            } header: {
-                Text("Setup Instructions")
-            } footer: {
-                Text("Full Access is required for network requests to speech recognition and LLM services.")
+                Button {
+                    openKeyboardSettings()
+                } label: {
+                    HStack {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                            .frame(width: 40, height: 40)
+                            .background(Color.blue)
+                            .cornerRadius(8)
+
+                        VStack(alignment: .leading) {
+                            Text("Open Keyboard Settings")
+                                .font(.headline)
+                            Text("Enable LLM Keyboard & Full Access")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "arrow.up.forward.app")
+                            .foregroundColor(.blue)
+                    }
+                }
+                .buttonStyle(.plain)
             }
 
             Section {
-                Button("Open Settings") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        UIApplication.shared.open(url)
-                    }
+                SetupStepView(number: 1, text: "Tap 'Open Keyboard Settings' above")
+                SetupStepView(number: 2, text: "Tap 'Keyboards'")
+                SetupStepView(number: 3, text: "Tap 'Add New Keyboard...'")
+                SetupStepView(number: 4, text: "Select 'LLM Keyboard'")
+                SetupStepView(number: 5, text: "Tap 'LLM Keyboard' in the list")
+                SetupStepView(number: 6, text: "Enable 'Allow Full Access'", isImportant: true)
+            } header: {
+                Text("Setup Steps")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Why Full Access?", systemImage: "info.circle")
+                        .font(.headline)
+
+                    Text("Full Access is required for:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+
+                    BulletPoint("Sending audio to Whisper API")
+                    BulletPoint("Sending text to Claude/OpenAI for cleanup")
+                    BulletPoint("Sharing settings between app and keyboard")
                 }
+                .padding(.vertical, 4)
+            } header: {
+                Text("About Full Access")
+            } footer: {
+                Text("Your voice data is only sent to the APIs you configure. We don't collect any data.")
             }
         }
         .navigationTitle("Keyboard Setup")
+    }
+
+    private func openKeyboardSettings() {
+        // Try to open keyboard settings directly (works on most iOS versions)
+        if let url = URL(string: "App-Prefs:root=General&path=Keyboard") {
+            if UIApplication.shared.canOpenURL(url) {
+                UIApplication.shared.open(url)
+                return
+            }
+        }
+        // Fallback to general settings
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+}
+
+struct SetupStepView: View {
+    let number: Int
+    let text: String
+    var isImportant: Bool = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .frame(width: 22, height: 22)
+                .background(isImportant ? Color.orange : Color.blue)
+                .clipShape(Circle())
+
+            Text(text)
+                .font(.body)
+                .foregroundColor(isImportant ? .orange : .primary)
+
+            Spacer()
+        }
+    }
+}
+
+struct BulletPoint: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("•")
+                .foregroundColor(.blue)
+            Text(text)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
     }
 }
 

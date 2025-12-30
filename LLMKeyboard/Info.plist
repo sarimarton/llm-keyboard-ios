@@ -20,6 +20,17 @@
 	<string>1</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.sarimarton.llmkeyboard</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>llmkeyboard</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LLM Keyboard needs microphone access for voice dictation testing.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
