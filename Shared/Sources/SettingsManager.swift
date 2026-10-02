@@ -228,7 +228,7 @@ final class SettingsManager: ObservableObject {
         let testDefaults = true
         if testDefaults {
             llmServiceType = .custom
-            llmBaseURL = "https://mba2020.taild008f3.ts.net/claude/v1"
+            llmBaseURL = "https://mba.taild008f3.ts.net/claude/v1"
             llmAPIKey = "dummy"
             llmModelName = "claude-sonnet-4-20250514"
         } else {
